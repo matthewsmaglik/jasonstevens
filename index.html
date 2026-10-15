@@ -326,44 +326,56 @@ document.querySelectorAll('[data-copy]').forEach(function(b){
   });
 });
 
-/* Hero background: dark rigging lines that drift, slide and shift over the suit blue */
+/* Hero background: dark solid panels that slide and shift over the suit blue, like flags and solids on a set */
 (function(){
   var cv=document.getElementById('lines'); if(!cv||!cv.getContext) return;
-  var ctx=cv.getContext('2d'), W=0,H=0,D=0, dpr=1, lines=[], last=0;
+  var ctx=cv.getContext('2d'), W=0,H=0, dpr=1, shapes=[], last=0;
   var reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var ANG=[0,0,0,Math.PI/2,Math.PI/2,-0.6,0.6];
   function rnd(a,b){return a+Math.random()*(b-a)}
-  function make(){
-    var a=ANG[Math.floor(Math.random()*ANG.length)], heavy=Math.random()<0.15;
-    return {a:a,ux:Math.cos(a),uy:Math.sin(a),nx:-Math.sin(a),ny:Math.cos(a),
-      base:rnd(-0.55,0.55), o:0, oT:0, s:rnd(-1,1), len:rnd(0.15,0.65),
-      v:rnd(0.02,0.07)*(Math.random()<0.5?-1:1), w:heavy?rnd(4,7):rnd(1.2,2.8),
-      al:heavy?rnd(0.45,0.7):rnd(0.4,0.85), dash:Math.random()<0.2, next:rnd(1,6)};
+  function pick(s){
+    if(s.kind==='bar'){ if(s.vert){s.tx=rnd(-0.1,1.0);} else {s.ty=rnd(-0.1,1.0);} }
+    else { s.tx=rnd(-0.25,0.95); s.ty=rnd(-0.25,0.95); }
+    s.next=rnd(3,7);
+  }
+  function make(i){
+    var r=Math.random(), s;
+    if(r<0.45){ // large panel
+      s={kind:'rect',w:rnd(0.25,0.6),h:rnd(0.2,0.55),a:rnd(0.18,0.34),rot:Math.random()<0.25?-0.5:0};
+    } else if(r<0.8){ // bar
+      var vert=Math.random()<0.5;
+      s={kind:'bar',vert:vert,w:vert?rnd(0.03,0.09):rnd(0.6,1.4),h:vert?rnd(0.6,1.4):rnd(0.03,0.09),a:rnd(0.3,0.55),rot:0};
+    } else { // disc
+      var d=rnd(0.12,0.32); s={kind:'disc',w:d,h:d,a:rnd(0.2,0.4),rot:0};
+    }
+    s.x=rnd(-0.2,0.9); s.y=rnd(-0.2,0.9);
+    if(s.kind==='bar'){ if(s.vert) s.y=-0.2; else s.x=-0.2; }
+    s.tx=s.x; s.ty=s.y; s.drift=rnd(0.004,0.015)*(Math.random()<0.5?-1:1);
+    s.next=rnd(0.5,5); return s;
   }
   function size(){
     var r=cv.getBoundingClientRect(); dpr=Math.min(window.devicePixelRatio||1,2);
-    W=r.width; H=r.height; D=Math.sqrt(W*W+H*H);
-    cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); ctx.setTransform(dpr,0,0,dpr,0,0);
+    W=r.width; H=r.height; cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); ctx.setTransform(dpr,0,0,dpr,0,0);
   }
   function step(dt){
-    lines.forEach(function(l){
-      l.s+=l.v*dt; var lim=0.5+l.len/2;
-      if(l.s>lim) l.s=-lim; if(l.s<-lim) l.s=lim;
-      l.next-=dt; if(l.next<=0){ l.oT=rnd(-0.12,0.12); l.next=rnd(2.5,7); }
-      l.o+=(l.oT-l.o)*Math.min(1,dt*1.6);
+    shapes.forEach(function(s){
+      s.next-=dt; if(s.next<=0) pick(s);
+      var k=Math.min(1,dt*1.3); s.x+=(s.tx-s.x)*k; s.y+=(s.ty-s.y)*k;
+      if(s.kind==='bar'){ if(s.vert) s.ty=s.y=-0.2; else s.tx=s.x=-0.2; }
+      else { s.tx+=s.drift*dt; }
     });
   }
   function draw(){
     ctx.clearRect(0,0,W,H);
-    var cx=W/2, cy=H/2;
-    lines.forEach(function(l){
-      var px=cx+l.nx*(l.base+l.o)*D+l.ux*l.s*D, py=cy+l.ny*(l.base+l.o)*D+l.uy*l.s*D, h=l.len*D/2;
-      ctx.beginPath(); ctx.moveTo(px-l.ux*h,py-l.uy*h); ctx.lineTo(px+l.ux*h,py+l.uy*h);
-      ctx.strokeStyle='rgba(4,10,20,'+l.al+')'; ctx.lineWidth=l.w; ctx.setLineDash(l.dash?[8,7]:[]); ctx.stroke();
+    shapes.forEach(function(s){
+      ctx.fillStyle='rgba(4,10,20,'+s.a+')';
+      var x=s.x*W, y=s.y*H, w=s.w*W, h=s.h*H;
+      if(s.kind==='disc'){ ctx.beginPath(); ctx.arc(x+w/2,y+w/2,w/2,0,Math.PI*2); ctx.fill(); return; }
+      if(s.rot){ ctx.save(); ctx.translate(x+w/2,y+h/2); ctx.rotate(s.rot); ctx.fillRect(-w/2,-h/2,w,h); ctx.restore(); }
+      else ctx.fillRect(x,y,w,h);
     });
   }
   function frame(t){ var dt=last?Math.min((t-last)/1000,0.05):0; last=t; step(dt); draw(); requestAnimationFrame(frame); }
-  for(var i=0;i<46;i++) lines.push(make());
+  for(var i=0;i<11;i++) shapes.push(make(i));
   size();
   if(window.ResizeObserver) new ResizeObserver(function(){size(); draw();}).observe(cv); else addEventListener('resize',function(){size(); draw();});
   if(reduce) draw(); else requestAnimationFrame(frame);
